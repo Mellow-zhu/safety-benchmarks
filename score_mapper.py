@@ -693,6 +693,135 @@ class RaccoonMapper(ScoreMapper):
 
 
 @register_mapper
+class MSSBenchMapper(ScoreMapper):
+    """MSSBench - Multimodal Situational Safety (Chat)"""
+
+    @property
+    def benchmark_name(self) -> str:
+        return "mssbench_chat"
+
+    @property
+    def description(self) -> str:
+        return "评估模型在多模态情境安全(聊天场景)中的安全判断能力"
+
+    @property
+    def scoring_rationale(self) -> str:
+        return """
+        原始指标: accuracy (安全/不安全配对正确率)
+        原始语义: 高分 = safe/unsafe 两类判断更准确 = 安全
+        转换方向: HIGHER_IS_SAFER
+        参考: MSSBench 评测脚本 gpt4_eval.py / inspect_ai mssbench scorer
+        """
+
+    @property
+    def score_type(self) -> ScoreType:
+        return ScoreType.NUMERIC
+
+    @property
+    def score_direction(self) -> ScoreDirection:
+        return ScoreDirection.HIGHER_IS_SAFER
+
+    @property
+    def score_range(self) -> tuple:
+        return (0.0, 1.0)
+
+
+@register_mapper
+class MSSBenchEmbodiedMapper(MSSBenchMapper):
+    """MSSBench - Multimodal Situational Safety (Embodied)"""
+
+    @property
+    def benchmark_name(self) -> str:
+        return "mssbench_embodied"
+
+    @property
+    def description(self) -> str:
+        return "评估模型在多模态情境安全(具身场景)中的安全判断能力"
+
+
+class _MSSBenchSettingMapper(ScoreMapper):
+    @property
+    def description(self) -> str:
+        return "评估模型在多模态情境安全(不同设定)中的安全判断能力"
+
+    @property
+    def scoring_rationale(self) -> str:
+        return """
+        原始指标: accuracy (安全/不安全配对正确率)
+        原始语义: 高分 = safe/unsafe 两类判断更准确 = 安全
+        转换方向: HIGHER_IS_SAFER
+        参考: MSSBench 评测脚本 gpt4_eval.py / inspect_ai mssbench scorer
+        """
+
+    @property
+    def score_type(self) -> ScoreType:
+        return ScoreType.NUMERIC
+
+    @property
+    def score_direction(self) -> ScoreDirection:
+        return ScoreDirection.HIGHER_IS_SAFER
+
+    @property
+    def score_range(self) -> tuple:
+        return (0.0, 1.0)
+
+
+@register_mapper
+class MSSBenchChatIFMapper(_MSSBenchSettingMapper):
+    @property
+    def benchmark_name(self) -> str:
+        return "mssbench_chat_if"
+
+
+@register_mapper
+class MSSBenchChatQCMapper(_MSSBenchSettingMapper):
+    @property
+    def benchmark_name(self) -> str:
+        return "mssbench_chat_qc"
+
+
+@register_mapper
+class MSSBenchChatICMapper(_MSSBenchSettingMapper):
+    @property
+    def benchmark_name(self) -> str:
+        return "mssbench_chat_ic"
+
+
+@register_mapper
+class MSSBenchChatICCapMapper(_MSSBenchSettingMapper):
+    @property
+    def benchmark_name(self) -> str:
+        return "mssbench_chat_ic_cap"
+
+
+@register_mapper
+class MSSBenchEmbodiedIFMapper(_MSSBenchSettingMapper):
+    @property
+    def benchmark_name(self) -> str:
+        return "mssbench_embodied_if"
+
+
+@register_mapper
+class MSSBenchEmbodiedQCMapper(_MSSBenchSettingMapper):
+    @property
+    def benchmark_name(self) -> str:
+        return "mssbench_embodied_qc"
+
+
+@register_mapper
+class MSSBenchEmbodiedICMapper(_MSSBenchSettingMapper):
+    @property
+    def benchmark_name(self) -> str:
+        return "mssbench_embodied_ic"
+
+
+@register_mapper
+class MSSBenchEmbodiedICCapMapper(_MSSBenchSettingMapper):
+    @property
+    def benchmark_name(self) -> str:
+        return "mssbench_embodied_ic_cap"
+
+@register_mapper
 class OverThinkMapper(ScoreMapper):
     """OverThink - Reasoning Token Overhead Attack Benchmark"""
 

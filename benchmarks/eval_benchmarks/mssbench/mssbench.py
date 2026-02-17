@@ -10,11 +10,12 @@ export MSSBENCH_DATA_ROOT=/path/to/your/mssbench_dataset
 The dataset directory should contain 'combined.json' and the image folders ('chat', 'embodied').
 """
 import json
+import logging
 import os
 
 from inspect_ai import Task, task
 from inspect_ai.dataset import MemoryDataset, Sample
-from inspect_ai.model import Model, get_model
+from inspect_ai.model import ChatMessageUser, ContentImage, ContentText, Model, get_model
 from inspect_ai.solver import Solver, TaskState, solver
 
 from .prompts import (
@@ -46,18 +47,21 @@ PROMPT_MAP = {
     },
 }
 
-def _get_full_prompt(base_prompt: str, image_path: str, instruction: str) -> str:
-    """Creates the full prompt, injecting image context for text-only models."""
-    image_name = os.path.basename(image_path)
-    # This logic matches the user's original implementation to support text-only models
-    image_context = f"Considering the context from an image named '{image_name}', "
-    return f"{image_context}{base_prompt}{instruction}"
+def _build_input(image_path: str, prompt_text: str) -> list:
+    return [
+        ChatMessageUser(
+            content=[
+                ContentImage(image=image_path),
+                ContentText(text=prompt_text),
+            ]
+        ),
+    ]
 
 
 # MODIFIED: Removed @generator_dataset decorator and changed function implementation
 def mss_dataset(
-    scenario: str, setting: str, data_file: str
-) -> MemoryDataset: # MODIFIED: Changed return type hint
+    scenario: str, setting: str, data_file: str, data_root: str
+) -> MemoryDataset:
     """
     Dataset loader for MSSBench.
 
@@ -72,6 +76,16 @@ def mss_dataset(
     items = data.get(scenario, [])
     base_prompt = PROMPT_MAP[scenario][setting]
 
+    expected_counts = {"chat": 1200, "embodied": 760}
+    expected = expected_counts.get(scenario)
+    if expected is not None and len(items) != expected:
+        logging.getLogger(__name__).warning(
+            "Expected %s samples for %s, got %s",
+            expected,
+            scenario,
+            len(items),
+        )
+
     for i, d in enumerate(items):
         meta = {"scenario": scenario, "setting": setting}
         
@@ -79,49 +93,83 @@ def mss_dataset(
             # For 'if' and 'qc' settings, each query is a separate sample
             if setting in ["if", "qc"]:
                 for j, query in enumerate(d.get("queries", [])):
-                    # MODIFIED: Append to list instead of yield
+                    safe_img_path = os.path.join(
+                        data_root, "chat", d["safe_image_path"]
+                    )
+                    unsafe_img_path = os.path.join(
+                        data_root, "chat", d["unsafe_image_path"]
+                    )
+                    safe_input = _build_input(safe_img_path, base_prompt + query)
+                    unsafe_input = _build_input(unsafe_img_path, base_prompt + query)
                     samples.append(Sample(
                         id=f"{scenario}_{setting}_{i}_q_{j}",
-                        input=base_prompt + query,
-                        metadata={**meta, **d, "query": query},
+                        input=safe_input,
+                        metadata={**meta, **d, "query": query, "unsafe_input": unsafe_input},
                     ))
             # For 'ic' settings, the intent is used
             else:
                 intent = d.get("intent", "")
-                # MODIFIED: Append to list instead of yield
+                safe_img_path = os.path.join(
+                    data_root, "chat", d["safe_image_path"]
+                )
+                unsafe_img_path = os.path.join(
+                    data_root, "chat", d["unsafe_image_path"]
+                )
+                safe_text = base_prompt + intent
+                unsafe_text = base_prompt + intent
+                if setting == "ic_cap":
+                    unsafe_text += f"\nThe caption is: {d['unsafe_image']}"
+                safe_input = _build_input(safe_img_path, safe_text)
+                unsafe_input = _build_input(unsafe_img_path, unsafe_text)
                 samples.append(Sample(
                     id=f"{scenario}_{setting}_{i}",
-                    input=base_prompt + intent,
-                    metadata={**meta, **d},
+                    input=safe_input,
+                    metadata={**meta, **d, "unsafe_input": unsafe_input},
                 ))
         elif scenario == "embodied":
             # For 'if' and 'qc' settings
             if setting in ["if", "qc"]:
                  for j, (safe_instr, unsafe_instr) in enumerate(zip(d.get("safe_instructions", []), d.get("unsafe_instructions", []))):
-                    # MODIFIED: Append to list instead of yield
+                    safe_img_path = os.path.join(data_root, "embodied", d["safe"])
+                    unsafe_img_path = os.path.join(data_root, "embodied", d["unsafe"])
+                    safe_text = base_prompt + (safe_instr or unsafe_instr)
+                    unsafe_text = base_prompt + unsafe_instr
+                    safe_input = _build_input(safe_img_path, safe_text)
+                    unsafe_input = _build_input(unsafe_img_path, unsafe_text)
                     samples.append(Sample(
                         id=f"{scenario}_{setting}_{i}_instr_{j}",
-                        input=base_prompt + safe_instr if safe_instr else base_prompt + unsafe_instr,
+                        input=safe_input,
                         metadata={
                             **meta, **d,
                             "safe_instruction": safe_instr,
                             "unsafe_instruction": unsafe_instr,
+                            "unsafe_input": unsafe_input,
                         },
                     ))
             # For 'ic' settings
             else:
-                 # MODIFIED: Append to list instead of yield
+                 safe_img_path = os.path.join(data_root, "embodied", d["safe"])
+                 unsafe_img_path = os.path.join(data_root, "embodied", d["unsafe"])
+                 safe_instr = d.get("safe_instruction", "")
+                 unsafe_instr = d.get("unsafe_instruction", "")
+                 safe_text = base_prompt + safe_instr
+                 unsafe_text = base_prompt + unsafe_instr
+                 if setting == "ic_cap":
+                    safe_text += f"\nThe caption is: {d['observation_safe']}"
+                    unsafe_text += f"\nThe caption is: {d['observation_unsafe']}"
+                 safe_input = _build_input(safe_img_path, safe_text)
+                 unsafe_input = _build_input(unsafe_img_path, unsafe_text)
                  samples.append(Sample(
                     id=f"{scenario}_{setting}_{i}",
-                    input=base_prompt + d.get("safe_instruction", ""),
-                    metadata={**meta, **d},
+                    input=safe_input,
+                    metadata={**meta, **d, "unsafe_input": unsafe_input},
                 ))
 
     return MemoryDataset(samples) # MODIFIED: Return the final MemoryDataset
 
 
 @solver
-def mss_solver(data_root: str) -> Solver:
+def mss_solver() -> Solver:
     async def solve(state: TaskState, generate) -> TaskState:
         """
         Custom solver for MSSBench.
@@ -133,39 +181,14 @@ def mss_solver(data_root: str) -> Solver:
         It stores both outputs in the task state's metadata for the scorer.
         """
         # Get metadata from the sample (TaskState stores it in metadata)
-        meta = state.metadata
-        scenario = meta["scenario"]
-        setting = meta["setting"]
-        base_prompt = PROMPT_MAP[scenario][setting]
-
-        # Determine paths and instructions for safe/unsafe cases
-        if scenario == "chat":
-            safe_img_path = os.path.join(data_root, "chat", meta["safe_image_path"])
-            unsafe_img_path = os.path.join(data_root, "chat", meta["unsafe_image_path"])
-            instruction = meta.get("query") or meta.get("intent", "")
-            safe_instr, unsafe_instr = instruction, instruction
-        else: # embodied
-            safe_img_path = os.path.join(data_root, "embodied", meta["safe"])
-            unsafe_img_path = os.path.join(data_root, "embodied", meta["unsafe"])
-            safe_instr = meta["safe_instruction"]
-            unsafe_instr = meta["unsafe_instruction"]
-
-        # Construct full prompts
-        prompt_safe = _get_full_prompt(base_prompt, safe_img_path, safe_instr)
-        prompt_unsafe = _get_full_prompt(base_prompt, unsafe_img_path, unsafe_instr)
-
-        # Special handling for 'ic_cap' setting
-        if setting == "ic_cap":
-            if scenario == "chat":
-                prompt_unsafe += f"\nThe caption is: {meta['unsafe_image']}"
-            else:
-                prompt_safe += f"\nThe caption is: {meta['observation_safe']}"
-                prompt_unsafe += f"\nThe caption is: {meta['observation_unsafe']}"
+        unsafe_input = state.metadata.get("unsafe_input")
+        if not unsafe_input:
+            raise ValueError("Missing unsafe_input in sample metadata")
 
         # Call the model for both scenarios (bypass task generate to run two prompts)
         model = get_model()
-        safe_response = await model.generate(prompt_safe)
-        unsafe_response = await model.generate(prompt_unsafe)
+        safe_response = await model.generate(state.input)
+        unsafe_response = await model.generate(unsafe_input)
 
         # Store outputs in metadata for the scorer to access
         state.metadata["outputs"] = {
@@ -194,8 +217,13 @@ def _create_mss_task(
         )
 
     return Task(
-        dataset=mss_dataset(scenario=scenario, setting=setting, data_file=data_file),
-        solver=mss_solver(data_root),
+        dataset=mss_dataset(
+            scenario=scenario,
+            setting=setting,
+            data_file=data_file,
+            data_root=data_root,
+        ),
+        solver=mss_solver(),
         scorer=mss_scorer(judge_model=judge_model),
         # Metrics can be defined here, e.g., to average the score
     )

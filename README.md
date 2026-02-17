@@ -76,6 +76,17 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 ./run-eval.py cyberseceval_2:cyse2_interpreter_abuse --model openai/gpt-4o-mini --limit 100
 ```
 
+### 运行 MSSBench
+
+MSSBench 需要本地数据目录，默认通过子模块提供：
+
+```bash
+git submodule update --init benchmarks/eval_benchmarks/mssbench/data
+export MSSBENCH_DATA_ROOT=$PWD/benchmarks/eval_benchmarks/mssbench/data
+
+./run-eval.py mssbench --model openai/gpt-4o-mini --limit 100
+```
+
 ### 常用选项
 
 | 选项 | 说明 |

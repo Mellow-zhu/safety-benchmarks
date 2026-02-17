@@ -7,7 +7,7 @@ import re
 from typing import Optional
 
 from inspect_ai.model import GenerateConfig, Model, get_model
-from inspect_ai.scorer import Score, Scorer, Target, scorer
+from inspect_ai.scorer import Metric, Score, Scorer, Target, metric, scorer
 from inspect_ai.solver import TaskState
 
 # Judge prompt definitions adapted from MSSBench evaluation script.
@@ -91,7 +91,22 @@ def parse_label(review: str) -> Optional[int]:
     return None
 
 
-@scorer(metrics=[])
+@metric
+def accuracy() -> Metric:
+    def metric(scores: list[Score]) -> float:
+        if not scores:
+            return 0.0
+
+        values = [s.value for s in scores if isinstance(s.value, (int, float))]
+        if not values:
+            return 0.0
+
+        return sum(values) / len(values)
+
+    return metric
+
+
+@scorer(metrics=[accuracy()])
 def mss_scorer(
     judge_model: str | Model | None = None,
     judge_max_tokens: int = 800,
