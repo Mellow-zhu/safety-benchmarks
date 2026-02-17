@@ -27,6 +27,7 @@ class DependencyType(Enum):
     DOCKER = "docker"
     K8S = "k8s"
     DATASET_DOWNLOAD = "dataset_download"  # 需要手动下载的数据集
+    MILVUS = "milvus"
 
 
 @dataclass
@@ -162,6 +163,19 @@ BENCHMARK_REQUIREMENTS: list[BenchmarkRequirement] = [
             description="通过 --judge-model 或 catalog.yaml 中的 judge_model 指定",
         ),
     ),
+
+    # SafeRAG - Milvus service
+    BenchmarkRequirement(
+        benchmark="saferag",
+        tasks=["saferag_sn", "saferag_icc", "saferag_sa", "saferag_wdos"],
+        dependency=DependencyType.MILVUS,
+        description="SafeRAG 需要 Milvus 服务用于向量索引",
+        action=ActionItem(
+            title="启动 Milvus 服务",
+            command="milvus-server",
+            description="确保 Milvus 监听 127.0.0.1:19530 并可连接",
+        ),
+    ),
 ]
 
 
@@ -233,6 +247,17 @@ def check_k8s() -> tuple[bool, str]:
         return False, f"K8s 检查失败: {e}"
 
     return True, "Kubernetes 集群已就绪"
+
+
+def check_milvus() -> tuple[bool, str]:
+    """检查 Milvus 服务是否可用"""
+    import socket
+
+    try:
+        with socket.create_connection(("127.0.0.1", 19530), timeout=2):
+            return True, "Milvus 服务已就绪 (127.0.0.1:19530)"
+    except OSError:
+        return False, "Milvus 服务不可用 (127.0.0.1:19530)"
 
 
 def check_hf_token() -> tuple[bool, str]:
@@ -376,6 +401,8 @@ def run_preflight_checks(
                     )
                 elif benchmark == "privacylens":
                     passed, message = check_privacylens_data()
+            elif req.dependency == DependencyType.MILVUS:
+                passed, message = check_milvus()
 
             results.append(PreflightResult(
                 passed=passed,

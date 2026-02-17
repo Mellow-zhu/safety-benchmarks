@@ -116,6 +116,20 @@ benchmarks:
       - name: overthink
         path: eval_benchmarks/overthink
 
+  saferag:
+    source: local
+    module: eval_benchmarks/saferag
+    python: "3.10"
+    tasks:
+      - name: saferag_sn
+        path: eval_benchmarks/saferag_sn
+      - name: saferag_icc
+        path: eval_benchmarks/saferag_icc
+      - name: saferag_sa
+        path: eval_benchmarks/saferag_sa
+      - name: saferag_wdos
+        path: eval_benchmarks/saferag_wdos
+
   personalized_safety:
     source: local
     module: eval_benchmarks/personalized_safety

@@ -732,6 +732,142 @@ class OverThinkMapper(ScoreMapper):
         return (-2.0, 3.0)
 
 
+@register_mapper
+class SafeRagSnMapper(ScoreMapper):
+    """SafeRAG - Silver Noise (SN)"""
+
+    @property
+    def benchmark_name(self) -> str:
+        return "saferag_sn"
+
+    @property
+    def description(self) -> str:
+        return "SafeRAG SN attack success rate on RAG pipeline"
+
+    @property
+    def scoring_rationale(self) -> str:
+        return """
+        Raw metric: attack_success_rate (keyword match rate)
+        Semantics: higher attack success means the model is less safe
+        Direction: LOWER_IS_SAFER
+        Source: SafeRAG Attack.scoring() in tasks/nctd_attack.py
+        """
+
+    @property
+    def score_type(self) -> ScoreType:
+        return ScoreType.NUMERIC
+
+    @property
+    def score_direction(self) -> ScoreDirection:
+        return ScoreDirection.LOWER_IS_SAFER
+
+    @property
+    def score_range(self) -> tuple:
+        return (0.0, 1.0)
+
+
+@register_mapper
+class SafeRagIccMapper(ScoreMapper):
+    """SafeRAG - Inter-Context Conflict (ICC)"""
+
+    @property
+    def benchmark_name(self) -> str:
+        return "saferag_icc"
+
+    @property
+    def description(self) -> str:
+        return "SafeRAG ICC attack success rate on RAG pipeline"
+
+    @property
+    def scoring_rationale(self) -> str:
+        return """
+        Raw metric: attack_success_rate (keyword match rate)
+        Semantics: higher attack success means the model is less safe
+        Direction: LOWER_IS_SAFER
+        Source: SafeRAG Attack.scoring() in tasks/nctd_attack.py
+        """
+
+    @property
+    def score_type(self) -> ScoreType:
+        return ScoreType.NUMERIC
+
+    @property
+    def score_direction(self) -> ScoreDirection:
+        return ScoreDirection.LOWER_IS_SAFER
+
+    @property
+    def score_range(self) -> tuple:
+        return (0.0, 1.0)
+
+
+@register_mapper
+class SafeRagSaMapper(ScoreMapper):
+    """SafeRAG - Soft Ad (SA)"""
+
+    @property
+    def benchmark_name(self) -> str:
+        return "saferag_sa"
+
+    @property
+    def description(self) -> str:
+        return "SafeRAG SA attack success rate on RAG pipeline"
+
+    @property
+    def scoring_rationale(self) -> str:
+        return """
+        Raw metric: attack_success_rate (keyword match rate)
+        Semantics: higher attack success means the model is less safe
+        Direction: LOWER_IS_SAFER
+        Source: SafeRAG Attack.scoring() in tasks/nctd_attack.py
+        """
+
+    @property
+    def score_type(self) -> ScoreType:
+        return ScoreType.NUMERIC
+
+    @property
+    def score_direction(self) -> ScoreDirection:
+        return ScoreDirection.LOWER_IS_SAFER
+
+    @property
+    def score_range(self) -> tuple:
+        return (0.0, 1.0)
+
+
+@register_mapper
+class SafeRagWdosMapper(ScoreMapper):
+    """SafeRAG - White DoS (WDoS)"""
+
+    @property
+    def benchmark_name(self) -> str:
+        return "saferag_wdos"
+
+    @property
+    def description(self) -> str:
+        return "SafeRAG WDoS attack success rate on RAG pipeline"
+
+    @property
+    def scoring_rationale(self) -> str:
+        return """
+        Raw metric: attack_success_rate (keyword match rate)
+        Semantics: higher attack success means the model is less safe
+        Direction: LOWER_IS_SAFER
+        Source: SafeRAG Attack.scoring() in tasks/nctd_attack.py
+        """
+
+    @property
+    def score_type(self) -> ScoreType:
+        return ScoreType.NUMERIC
+
+    @property
+    def score_direction(self) -> ScoreDirection:
+        return ScoreDirection.LOWER_IS_SAFER
+
+    @property
+    def score_range(self) -> tuple:
+        return (0.0, 1.0)
+
+
 # ============================================================
 # 示例: 定性分数 Mapper
 # ============================================================

@@ -8,5 +8,6 @@ from . import raccoon  # noqa: F401
 from . import overthink  # noqa: F401
 from . import privacylens  # noqa: F401
 from . import personalized_safety  # noqa: F401
+from . import saferag  # noqa: F401
 
-__all__ = ["raccoon", "overthink", "privacylens", "personalized_safety"]
+__all__ = ["raccoon", "overthink", "privacylens", "personalized_safety", "saferag"]

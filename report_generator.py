@@ -22,6 +22,10 @@ _METRIC_PRIORITY = {
     "privacylens_probing": ["accuracy"],
     "privacylens_action": ["leakage"],
     "browse_comp": ["browse_comp_accuracy", "accuracy"],
+    "saferag_sn": ["attack_success_rate"],
+    "saferag_icc": ["attack_success_rate"],
+    "saferag_sa": ["attack_success_rate"],
+    "saferag_wdos": ["attack_success_rate"],
 }
 _FALLBACK_METRICS = ["accuracy", "mean", "leakage_rate", "reasoning_overhead"]
 

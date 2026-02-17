@@ -88,6 +88,31 @@ def get_venv_inspect(benchmark_name: str) -> Path:
     return get_venv_path(benchmark_name) / "bin" / "inspect"
 
 
+def ensure_pkg_resources(venv_path: Path) -> bool:
+    """确保 venv 可导入 pkg_resources"""
+    python_path = venv_path / "bin" / "python"
+    result = subprocess.run(
+        [str(python_path), "-c", "import pkg_resources"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return True
+
+    print("  修复 pkg_resources 缺失: 安装 setuptools<81 ...")
+    fix = subprocess.run(
+        ["uv", "pip", "install", "-p", str(venv_path), "setuptools<81"],
+        capture_output=True,
+        text=True,
+    )
+    if fix.returncode != 0:
+        print("  警告: 安装 setuptools<81 失败")
+        print(fix.stderr)
+        return False
+
+    return True
+
+
 def setup_benchmark_env(benchmark_name: str, config: dict, force: bool = False) -> bool:
     """
     为 benchmark 设置独立虚拟环境
@@ -120,38 +145,55 @@ def setup_benchmark_env(benchmark_name: str, config: dict, force: bool = False) 
         return False
 
     # 安装 inspect_ai
-    print(f"  安装 inspect_ai...")
-    result = subprocess.run(
-        ["uv", "pip", "install", "-p", str(venv_path),
-         "-e", str(UPSTREAM_DIR / "inspect_ai")],
-        capture_output=True,
-        text=True
-    )
+    inspect_ai_dir = UPSTREAM_DIR / "inspect_ai"
+    use_submodule = (inspect_ai_dir / "pyproject.toml").exists() or (inspect_ai_dir / "setup.py").exists()
+    if use_submodule:
+        print(f"  安装 inspect_ai (submodule)...")
+        result = subprocess.run(
+            ["uv", "pip", "install", "-p", str(venv_path),
+             "-e", str(inspect_ai_dir)],
+            capture_output=True,
+            text=True
+        )
+    else:
+        print(f"  安装 inspect_ai (PyPI)...")
+        result = subprocess.run(
+            ["uv", "pip", "install", "-p", str(venv_path), "inspect-ai"],
+            capture_output=True,
+            text=True
+        )
     if result.returncode != 0:
         print(f"  错误: 安装 inspect_ai 失败")
         print(result.stderr)
         return False
 
-    # 检查 upstream/inspect_evals 子模块是否已初始化
+    # 安装 inspect_evals (子模块优先，否则 PyPI)
     inspect_evals_dir = UPSTREAM_DIR / "inspect_evals"
-    if not (inspect_evals_dir / "pyproject.toml").exists():
-        print(f"  错误: upstream/inspect_evals 未初始化。请运行:")
-        print(f"    git submodule update --init --recursive")
-        return False
+    use_evals_submodule = (inspect_evals_dir / "pyproject.toml").exists() or (inspect_evals_dir / "setup.py").exists()
+    if use_evals_submodule:
+        install_spec = str(inspect_evals_dir)
+        if extras:
+            extras_str = ",".join(extras)
+            install_spec = f"{install_spec}[{extras_str}]"
 
-    # 始终安装 inspect_evals（所有 benchmark 都需要）
-    install_spec = str(inspect_evals_dir)
-    if extras:
-        extras_str = ",".join(extras)
-        install_spec = f"{install_spec}[{extras_str}]"
-
-    extras_display = f"[{','.join(extras)}]" if extras else ""
-    print(f"  安装 inspect_evals{extras_display}...")
-    result = subprocess.run(
-        ["uv", "pip", "install", "-p", str(venv_path), "-e", install_spec],
-        capture_output=True,
-        text=True
-    )
+        extras_display = f"[{','.join(extras)}]" if extras else ""
+        print(f"  安装 inspect_evals{extras_display} (submodule)...")
+        result = subprocess.run(
+            ["uv", "pip", "install", "-p", str(venv_path), "-e", install_spec],
+            capture_output=True,
+            text=True
+        )
+    else:
+        extras_display = f"[{','.join(extras)}]" if extras else ""
+        print(f"  安装 inspect_evals{extras_display} (PyPI)...")
+        install_spec = "inspect-evals"
+        if extras:
+            install_spec = f"inspect-evals{extras_display}"
+        result = subprocess.run(
+            ["uv", "pip", "install", "-p", str(venv_path), install_spec],
+            capture_output=True,
+            text=True
+        )
     if result.returncode != 0:
         print(f"  错误: 安装 inspect_evals 失败")
         print(result.stderr)
@@ -184,8 +226,9 @@ def setup_benchmark_env(benchmark_name: str, config: dict, force: bool = False) 
                 text=True
             )
             if result.returncode != 0:
-                print(f"  警告: 安装 {module_name} 依赖失败")
+                print(f"  错误: 安装 {module_name} 依赖失败")
                 print(result.stderr)
+                return False
 
     # 安装 openai (必需)
     print(f"  安装 openai...")
@@ -198,6 +241,9 @@ def setup_benchmark_env(benchmark_name: str, config: dict, force: bool = False) 
         print(f"  错误: 安装 openai 失败")
         print(result.stderr)
         return False
+
+    # 修复 pkg_resources 缺失问题 (inspect entrypoints 依赖)
+    ensure_pkg_resources(venv_path)
 
     # cve_bench 需要单独安装 cvebench 包（uv extras 处理有问题）
     # 新版 cvebench 已包含所有 challenges 和 docker 配置数据
@@ -664,6 +710,13 @@ def main():
         help="模型 API Key（覆盖 .env 中的 OPENAI_API_KEY）"
     )
     parser.add_argument(
+        "-T",
+        dest="task_args",
+        action="append",
+        default=[],
+        help="传递给 inspect eval 的 task 参数，例如: -T key=value"
+    )
+    parser.add_argument(
         "extra_args",
         nargs="*",
         help="传递给 inspect eval 的额外参数"
@@ -741,6 +794,10 @@ def main():
         VENVS_DIR.mkdir(parents=True, exist_ok=True)
 
         results_summary = []
+        passthrough_args = []
+        for item in args.task_args:
+            passthrough_args.extend(["-T", item])
+        passthrough_args.extend(args.extra_args)
         for name, config in benchmarks.items():
             tasks = config.get("tasks", [])
             if not tasks:
@@ -769,7 +826,7 @@ def main():
                     model=args.model,
                     limit=args.limit,
                     judge_model=args.judge_model,
-                    extra_args=args.extra_args,
+                    extra_args=passthrough_args,
                     dry_run=args.dry_run,
                     task_config=task_config,
                     no_index=args.no_index,
@@ -884,6 +941,11 @@ def main():
     # 确保 .venvs 目录存在
     VENVS_DIR.mkdir(parents=True, exist_ok=True)
 
+    passthrough_args = []
+    for item in args.task_args:
+        passthrough_args.extend(["-T", item])
+    passthrough_args.extend(args.extra_args)
+
     return run_eval(
         benchmark_name=benchmark_name,
         task_spec=task_spec,
@@ -891,7 +953,7 @@ def main():
         model=args.model,
         limit=args.limit,
         judge_model=args.judge_model,
-        extra_args=args.extra_args,
+        extra_args=passthrough_args,
         dry_run=args.dry_run,
         task_config=task_config,
         no_index=args.no_index,
